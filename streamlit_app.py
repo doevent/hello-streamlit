@@ -1,40 +1,77 @@
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import requests
+from PIL import Image
+import io
 
+# Streamlit configuration
+st.set_page_config(
+    page_title="Image Analyzer",
+    page_icon="🖼️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Hide Streamlit menu and footer
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+</style>
 """
-# Welcome to Streamlit!
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+# Custom CSS for mobile-friendly design
+st.markdown("""
+<style>
+    .stApp {
+        max-width: 100%;
+        padding: 1rem;
+    }
+    .stFileUploader > div > div > button {
+        width: 100%;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+def send_image_to_api(image):
+    """Send image to API and return the response"""
+    url = "https://doevent.ru/api/v1"
+    files = {"image": ("image.jpg", image, "image/jpeg")}
+    
+    try:
+        response = requests.post(url, files=files)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error communicating with the API: {e}")
+        return None
 
-num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
+def main():
+    st.title("Image Analyzer")
+    
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+    
+    if uploaded_file is not None:
+        # Display uploaded image
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Uploaded Image", use_column_width=True)
+        
+        # Convert image to bytes
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='JPEG')
+        img_byte_arr = img_byte_arr.getvalue()
+        
+        # Send image to API
+        with st.spinner("Analyzing image..."):
+            result = send_image_to_api(img_byte_arr)
+        
+        if result:
+            # Display received image
+            st.image(result["image_url"], caption="Processed Image", use_column_width=True)
+            
+            # Display received text
+            st.write("Analysis Result:")
+            st.write(result["text"])
 
-indices = np.linspace(0, 1, num_points)
-theta = 2 * np.pi * num_turns * indices
-radius = indices
-
-x = radius * np.cos(theta)
-y = radius * np.sin(theta)
-
-df = pd.DataFrame({
-    "x": x,
-    "y": y,
-    "idx": indices,
-    "rand": np.random.randn(num_points),
-})
-
-st.altair_chart(alt.Chart(df, height=700, width=700)
-    .mark_point(filled=True)
-    .encode(
-        x=alt.X("x", axis=None),
-        y=alt.Y("y", axis=None),
-        color=alt.Color("idx", legend=None, scale=alt.Scale()),
-        size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-    ))
+if __name__ == "__main__":
+    main()
